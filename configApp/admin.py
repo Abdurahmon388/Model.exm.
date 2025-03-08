@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models import *
 
+
 class UserAdmin(admin.ModelAdmin):
     ordering = ['id']
     list_display = (
@@ -15,7 +16,6 @@ admin.site.register(Day)
 admin.site.register(Rooms)
 admin.site.register(Group)
 admin.site.register(Student)
-
 
 @admin.register(Teacher)
 class TeacherAdmin(admin.ModelAdmin):

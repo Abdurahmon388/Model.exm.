@@ -18,7 +18,9 @@ from django.utils.dateparse import parse_date
 from rest_framework.decorators import api_view, action
 from django.http import JsonResponse
 from django.views import View
-
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+import random
 
 class Pagination(LimitOffsetPagination):
     default_limit = 10
@@ -47,14 +49,11 @@ class UserUpdateView(generics.UpdateAPIView):
     lookup_field = 'id'
     permission_classes = [IsAuthenticated]
 
-
 class UserDeleteView(generics.DestroyAPIView):
     queryset = User.objects.all()
     serializer_class = UserAllSerializer
     lookup_field = 'id'
     permission_classes = [IsAuthenticated]
-
-
 
 class PhoneSendOTP(APIView):
     @swagger_auto_schema(request_body=SMSSerializer)
@@ -117,7 +116,6 @@ class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
     
-
 class StudentListView(ListAPIView):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
@@ -236,7 +234,6 @@ class RegisterUserApi(APIView):
         serializer = UserSerializer(users, many=True)
         return Response(data=serializer.data)
 
-
 class ChangePasswordView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
@@ -247,7 +244,6 @@ class ChangePasswordView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class DepartmentsApiView(ModelViewSet):
     queryset = Departments.objects.all().order_by('-id')
@@ -313,7 +309,6 @@ class CourseApiView(ModelViewSet):
     queryset = Course.objects.all().order_by('-id')
     serializer_class = CourseSerializer
     pagination_class = PageNumberPagination
-
 
 class TeacherApiView(APIView):
     pagination_class = PageNumberPagination
@@ -389,7 +384,6 @@ class TeacherGroupsAPIView(APIView):
 
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-
 class WorkerApiView(APIView):
     pagination_class = PageNumberPagination
 
@@ -412,7 +406,6 @@ class WorkerApiView(APIView):
         worker = Worker.objects.filter(user__is_staff=True).order_by('-id')
         serializer = WorkerSerializer(worker, many=True)
         return Response(data=serializer.data)
-
 
 class WorkerApiViewId(APIView):
     def get(self, request, pk):
@@ -443,7 +436,6 @@ class WorkerApiViewId(APIView):
         except Exception as e:
             return Response(data={'error': e})
 
-
 class WorkerApiView(APIView):
     pagination_class = PageNumberPagination
 
@@ -465,18 +457,15 @@ class WorkerApiView(APIView):
         serializer = WorkerSerializer(worker, many=True)
         return Response(data=serializer.data)
 
-
 class RoomAPIView(ModelViewSet):
     queryset = Rooms.objects.all().order_by('-id')
     serializer_class = RoomSerializer
     pagination_class = PageNumberPagination
 
-
 class DayAPIView(ModelViewSet):
     queryset = Day.objects.all().order_by('-id')
     serializer_class = DaySerializer
     pagination_class = PageNumberPagination
-
 
 class WorkerApiView(APIView):
     pagination_class = PageNumberPagination
@@ -650,4 +639,53 @@ class ParentsViewSet(viewsets.ViewSet):
         parent.delete()
         return Response({'status':True,'detail': 'Parent muaffaqiatli uchirildi'}, status=status.HTTP_204_NO_CONTENT)
 
+
+User = get_user_model()
+
+class RegisterView(APIView):
+    """
+    Telefon raqam orqali foydalanuvchini ro'yxatdan o'tkazish va OTP yuborish
+    """
+
+    def post(self, request):
+        phone = request.data.get("phone")
+        if not phone:
+            return Response({"error": "Telefon raqami talab qilinadi"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 4 xonali tasodifiy OTP yaratish
+        otp_code = random.randint(1000, 9999)
+        
+        # OTP ni vaqtinchalik saqlash (30 daqiqa)
+        cache.set(phone, otp_code, timeout=1800)
+
+        return Response({"message": "OTP kod yuborildi", "otp": otp_code}, status=status.HTTP_201_CREATED)
+
+class VerifyOTPView(APIView):
+    """
+    OTP orqali foydalanuvchini tasdiqlash va akkaunt yaratish
+    """
+
+    def post(self, request):
+        phone = request.data.get("phone")
+        otp_code = request.data.get("otp")
+
+        if not phone or not otp_code:
+            return Response({"error": "Telefon raqam va OTP kod talab qilinadi"}, status=status.HTTP_400_BAD_REQUEST)
+
+        stored_otp = cache.get(phone)
+
+        if not stored_otp or str(stored_otp) != str(otp_code):
+            return Response({"error": "Noto‘g‘ri yoki eskirgan OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # OTP to‘g‘ri bo‘lsa, foydalanuvchini ro‘yxatdan o‘tkazamiz
+        user, created = User.objects.get_or_create(phone=phone)
+        
+        if created:
+            user.set_password(str(otp_code))  # Parol sifatida vaqtinchalik OTP
+            user.save()
+
+        # OTP ni cache dan o‘chirish
+        cache.delete(phone)
+
+        return Response({"message": "Ro'yxatdan o‘tish muvaffaqiyatli yakunlandi"}, status=status.HTTP_200_OK)
 

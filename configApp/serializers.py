@@ -50,7 +50,6 @@ class ChangePasswordSerializer(serializers.ModelSerializer):
     re_new_password = serializers.CharField(required=True, write_only=True)
 
     def update(self, instance, validated_data):
-
         instance.password = validated_data.get('password', instance.password)
 
         if not validated_data['new_password']:

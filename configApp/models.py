@@ -240,3 +240,119 @@ class Attendance(models.Model):
 
     def __str__(self):
         return self.level
+
+from typing import TYPE_CHECKING, Any, List, Optional, Union
+
+from django.contrib.auth import models as auth_models
+from django.db.models.manager import EmptyManager
+from django.utils.functional import cached_property
+
+from rest_framework.settings import api_settings
+
+if TYPE_CHECKING:
+    from .models import Token
+
+
+class TokenUser:
+    """
+    Token orqali autentifikatsiya qilinadigan foydalanuvchi klassi.
+    Bu klass JWT asosida autentifikatsiya qilingan foydalanuvchilar uchun ishlatiladi.
+    """
+
+    is_active = True  # Token orqali kirgan foydalanuvchi har doim aktiv bo‘ladi
+
+    _groups = EmptyManager(auth_models.Group)
+    _user_permissions = EmptyManager(auth_models.Permission)
+
+    def __init__(self, token: "Token") -> None:
+        self.token = token
+
+    def __str__(self) -> str:
+        return f"TokenUser {self.id}"
+
+    @cached_property
+    def id(self) -> Union[int, str]:
+        return self.token[api_settings.USER_ID_CLAIM]
+
+    @cached_property
+    def pk(self) -> Union[int, str]:
+        return self.id
+
+    @cached_property
+    def phone(self) -> str:
+        """Foydalanuvchining telefon raqami"""
+        return self.token.get("phone", "")
+
+    @cached_property
+    def full_name(self) -> str:
+        """Foydalanuvchining to‘liq ismi"""
+        return self.token.get("full_name", "")
+
+    @cached_property
+    def is_staff(self) -> bool:
+        return self.token.get("is_staff", False)
+
+    @cached_property
+    def is_superuser(self) -> bool:
+        return self.token.get("is_superuser", False)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, TokenUser):
+            return NotImplemented
+        return self.id == other.id
+
+    def __ne__(self, other: object) -> bool:
+        return not self.__eq__(other)
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def save(self) -> None:
+        raise NotImplementedError("Token foydalanuvchilari DB da saqlanmaydi")
+
+    def delete(self) -> None:
+        raise NotImplementedError("Token foydalanuvchilari DB da saqlanmaydi")
+
+    def set_password(self, raw_password: str) -> None:
+        raise NotImplementedError("Token foydalanuvchilari DB da saqlanmaydi")
+
+    def check_password(self, raw_password: str) -> None:
+        raise NotImplementedError("Token foydalanuvchilari DB da saqlanmaydi")
+
+    @property
+    def groups(self) -> auth_models.Group:
+        return self._groups
+
+    @property
+    def user_permissions(self) -> auth_models.Permission:
+        return self._user_permissions
+
+    def get_group_permissions(self, obj: Optional[object] = None) -> set:
+        return set()
+
+    def get_all_permissions(self, obj: Optional[object] = None) -> set:
+        return set()
+
+    def has_perm(self, perm: str, obj: Optional[object] = None) -> bool:
+        return False
+
+    def has_perms(self, perm_list: List[str], obj: Optional[object] = None) -> bool:
+        return False
+
+    def has_module_perms(self, module: str) -> bool:
+        return False
+
+    @property
+    def is_anonymous(self) -> bool:
+        return False
+
+    @property
+    def is_authenticated(self) -> bool:
+        return True
+
+    def get_phone(self) -> str:
+        return self.phone
+
+    def __getattr__(self, attr: str) -> Optional[Any]:
+        """Token serializerida qo‘shimcha claimlar bo‘lsa, ularni olish uchun"""
+        return self.token.get(attr, None)

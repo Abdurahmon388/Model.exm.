@@ -1,7 +1,9 @@
+
 from django.urls import path, include
 from .views import *
 from rest_framework.routers import DefaultRouter
 from configApp.views import CourseApiView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 
 router = DefaultRouter()
@@ -23,7 +25,7 @@ router.register(r'course', CourseApiView, basename='unique_course')
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('', UserListView.as_view(), name='user-list'), 
+    path('user/', UserListView.as_view(), name='user-list'), 
     
     path('user/<int:id>/', UserDetailView.as_view(), name='user-detail'), 
     path('create/user/', UserCreateView.as_view(), name='user-create'), 
@@ -48,17 +50,29 @@ urlpatterns = [
     path('update/teacher/<int:id>/',TeacherUpdateView.as_view(),name="update_teacher"),
     path('teacher-groups/<int:teacher_id>/',TeacherGroupsAPIView.as_view(),name="teacher_groups"),
     
-    path('students/',StudentListView.as_view(),name="all_students"),
-    path('student/<int:id>/',StudentRetrieveAPIView.as_view(),name="student"),
     path('create/student/',StudentCreateAPIView.as_view(),name='add_student'),
     path('update/student/<int:id>/',StudentUpdateView.as_view(),name="update_student"),
     path('students-groups/', StudentGroupListView.as_view(), name='students-groups'),
     path('student-groups/<int:student_id>/', StudentGroupsAPIView.as_view(), name="student_groups"),
-    
+    path('group_get/', GroupApi.as_view()),
+
     path('workerAPI/', WorkerApiView.as_view()),
     path('workerId/<int:pk>/', WorkerApiViewId.as_view()),
     
     path('student/', StudentApiView.as_view()),
     path('student/<int:pk>/', StudentApiViewId.as_view()),
-    path('group_get/', GroupApi.as_view()),
+    path('students/',StudentListView.as_view(),name="all_students"),
+    path('student/<int:id>/',StudentRetrieveAPIView.as_view(),name="student"),
+     # Ro'yxatdan o'tish (telefon raqam bilan)
+    path('register/', RegisterView.as_view(), name='register'),
+
+    # OTP orqali tasdiqlash
+    path('verify/', VerifyOTPView.as_view(), name='verify'),
+
+    # JWT login (token olish)
+    path('login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+
+    # JWT refresh token
+    path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]
+

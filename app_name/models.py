@@ -24,4 +24,5 @@ class News(models.Model):
         verbose_name = "NEW"
         verbose_name_plural = "NEWS"
         ordering = ['-created_ed']
+        
 # Create your models here.
