@@ -1,8 +1,16 @@
 
-from rest_framework import serializers
 from django.contrib.auth.hashers import make_password
 from .models import *
+from typing import Any, Dict, Optional, Type, TypeVar
+from django.conf import settings
+from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.models import AbstractBaseUser, update_last_login
+from django.utils.translation import gettext_lazy as _
 
+from rest_framework import exceptions, serializers
+from rest_framework.exceptions import ValidationError
+from rest_framework_simplejwt.tokens import RefreshToken, Token, UntypedToken
+from rest_framework_simplejwt.settings import api_settings
 
 class ParentsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -149,5 +157,120 @@ class UserAndStudentSerializer(serializers.Serializer):
     user = UserSerializer()
     student = StudentSerializer()
 
+
+AuthUser = TypeVar("AuthUser", AbstractBaseUser, TokenUser)
+
+if api_settings.BLACKLIST_AFTER_ROTATION:
+    from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+
+class PasswordField(serializers.CharField):
+    def __init__(self, *args, **kwargs) -> None:
+        kwargs.setdefault("style", {})
+        kwargs["style"]["input_type"] = "password"
+        kwargs["write_only"] = True
+        super().__init__(*args, **kwargs)
+
+class TokenObtainSerializer(serializers.Serializer):
+    username_field = get_user_model().USERNAME_FIELD
+    token_class: Optional[Type[Token]] = None
+
+    default_error_messages = {
+        "no_active_account": _("No active account found with the given credentials")}
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields[self.username_field] = serializers.CharField(write_only=True)
+        self.fields["password"] = PasswordField()
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[Any, Any]:
+        authenticate_kwargs = {
+            self.username_field: attrs[self.username_field],
+            "password": attrs["password"],
+        }
+        try:
+            authenticate_kwargs["request"] = self.context["request"]
+        except KeyError:
+            pass
+
+        self.user = authenticate(**authenticate_kwargs)
+
+        if not self.user or not self.user.is_active:
+            raise exceptions.AuthenticationFailed(
+                self.error_messages["no_active_account"],
+                "no_active_account",
+            )
+
+        return {}
+
+    @classmethod
+    def get_token(cls, user: AuthUser) -> Token:
+        return cls.token_class.for_user(user)  # type: ignore
+
+class TokenObtainPairSerializer(TokenObtainSerializer):
+    token_class = RefreshToken
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, str]:
+        data = super().validate(attrs)
+        refresh = self.get_token(self.user)
+        data["refresh"] = str(refresh)
+        data["access"] = str(refresh.access_token)
+        data["is_staff"] = self.user.is_staff
+        data["is_manager"] = getattr(self.user, "is_manager", False)
+        data["is_admin"] = getattr(self.user, "is_admin", False)
+        data["is_active"] = self.user.is_active
+
+        if api_settings.UPDATE_LAST_LOGIN:
+            update_last_login(None, self.user)
+        return data
+
+class TokenRefreshSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+    access = serializers.CharField(read_only=True)
+    token_class = RefreshToken
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, str]:
+        refresh = self.token_class(attrs["refresh"])
+        data = {"access": str(refresh.access_token)}
+
+        if api_settings.ROTATE_REFRESH_TOKENS:
+            if api_settings.BLACKLIST_AFTER_ROTATION:
+                try:
+                    refresh.blacklist()
+                except AttributeError:
+                    pass
+
+            refresh.set_jti()
+            refresh.set_exp()
+            refresh.set_iat()
+
+            data["refresh"] = str(refresh)
+        return data
+
+class TokenVerifySerializer(serializers.Serializer):
+    token = serializers.CharField(write_only=True)
+
+    def validate(self, attrs: Dict[str, None]) -> Dict[Any, Any]:
+        token = UntypedToken(attrs["token"])
+
+        if (
+            api_settings.BLACKLIST_AFTER_ROTATION
+            and "rest_framework_simplejwt.token_blacklist" in settings.INSTALLED_APPS
+        ):
+            jti = token.get(api_settings.JTI_CLAIM)
+            if BlacklistedToken.objects.filter(token__jti=jti).exists():
+                raise ValidationError("Token is blacklisted")
+        return {}
+
+class TokenBlacklistSerializer(serializers.Serializer):
+    refresh = serializers.CharField(write_only=True)
+    token_class = RefreshToken
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[Any, Any]:
+        refresh = self.token_class(attrs["refresh"])
+        try:
+            refresh.blacklist()
+        except AttributeError:
+            pass
+        return {}
 
 

@@ -19,10 +19,9 @@ schema_view = get_schema_view(
     permission_classes=(permissions.AllowAny,),
 )
 
-urlpatterns = [
-    
+urlpatterns = [  
     path('admin/', admin.site.urls),
-    path('api/', include('configApp.urls')),
+    path('', include('configApp.urls')),
     
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),

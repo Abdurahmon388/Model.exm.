@@ -3,7 +3,11 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.core.validators import RegexValidator
 from django.contrib.auth.models import User
+from django.contrib.auth import models as auth_models
+from django.db.models.manager import EmptyManager
+from django.utils.functional import cached_property
 
+from rest_framework.settings import api_settings
 
 class UserManager(BaseUserManager):
     
@@ -241,17 +245,11 @@ class Attendance(models.Model):
     def __str__(self):
         return self.level
 
+
 from typing import TYPE_CHECKING, Any, List, Optional, Union
-
-from django.contrib.auth import models as auth_models
-from django.db.models.manager import EmptyManager
-from django.utils.functional import cached_property
-
-from rest_framework.settings import api_settings
 
 if TYPE_CHECKING:
     from .models import Token
-
 
 class TokenUser:
     """
