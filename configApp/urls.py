@@ -58,8 +58,8 @@ urlpatterns = [
 
     path('workerAPI/', WorkerApiView.as_view()),
     path('workerId/<int:pk>/', WorkerApiViewId.as_view()),
-    
     path('student/', StudentApiView.as_view()),
+    path('students/', StudentListView.as_view(), name='student-list'),
     path('student/<int:pk>/', StudentApiViewId.as_view()),
     path('students/',StudentListView.as_view(),name="all_students"),
     path('student/<int:id>/',StudentRetrieveAPIView.as_view(),name="student"),

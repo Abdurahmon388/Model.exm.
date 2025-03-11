@@ -1,4 +1,7 @@
 import random
+from configApp.models import Student
+from configApp.serializers import StudentSerializer
+from configApp.pagination import StudentPagination
 from django.core.cache import cache
 from django.shortcuts import render, get_object_or_404
 from drf_yasg.utils import swagger_auto_schema
@@ -8,6 +11,11 @@ from rest_framework.pagination import PageNumberPagination, LimitOffsetPaginatio
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.utils.module_loading import import_string
+from rest_framework.request import Request
+from rest_framework.serializers import Serializer
+from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from .models import *
 from .serializers import *
 from django.contrib.auth.hashers import make_password
@@ -116,11 +124,23 @@ class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
     
+from rest_framework.permissions import AllowAny
+
+class StudentListByIdsAPIView(APIView):
+    permission_classes = [AllowAny]  # Auth talab qilinmaydi
+
+    def post(self, request, *args, **kwargs):
+        student_ids = request.data.get("student_ids", [])
+        students = Student.objects.filter(id__in=student_ids)
+        serializer = StudentSerializer(students, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class StudentListView(ListAPIView):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
-    pagination_class = Pagination
-    permission_classes = [IsAuthenticated]
+    pagination_class = StudentPagination
+
 
 class StudentUpdateView(UpdateAPIView):
     queryset = Student.objects.all()
@@ -568,6 +588,13 @@ class GroupApi(APIView):
             "tables": serializer_table.data
         }
         return Response(data=datas)
+
+class GroupListByIdsAPIView(APIView):
+    def post(self, request, *args, **kwargs):
+        group_ids = request.data.get("group_ids", [])  # JSON dan group ID larini olish
+        groups = Group.objects.filter(id__in=group_ids)  # Shu ID dagi grouplarni olish
+        serializer = GroupSerializer(groups, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 class TableTypeApi(ModelViewSet):
     pagination_class = PageNumberPagination
