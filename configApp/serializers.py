@@ -18,7 +18,7 @@ class ParentsSerializer(serializers.ModelSerializer):
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
-        fields = "__all__"
+        fields = ['id', 'full_name']
 
 class UserAllSerializer(serializers.ModelSerializer):
     class Meta:
@@ -112,8 +112,9 @@ class RoomSerializer(serializers.ModelSerializer):
         model = Rooms
         fields = ['id', 'title', 'descriptions']
 
+
 class GroupSerializer(serializers.ModelSerializer):
-    students = StudentSerializer(many=True)
+    students = StudentSerializer(many=True)  # PrimaryKeyRelatedField o‘rniga
     class Meta:
         model = Group
         fields = "__all__"

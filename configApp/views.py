@@ -566,6 +566,18 @@ class StudentApiViewId(APIView):
                 return Response(data=serializer.data)
         except Exception as e:
             return Response(data={'error': e})
+        
+from rest_framework import generics
+from configApp.models import Group
+from configApp.serializers import GroupSerializer
+
+class GroupListCreateView(generics.ListCreateAPIView):
+    queryset = Group.objects.all()
+    serializer_class = GroupSerializer
+
+class GroupRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Group.objects.all()
+    serializer_class = GroupSerializer
 
 class GroupApiView(ModelViewSet):
     pagination_class = PageNumberPagination

@@ -55,6 +55,8 @@ urlpatterns = [
     path('students-groups/', StudentGroupListView.as_view(), name='students-groups'),
     path('student-groups/<int:student_id>/', StudentGroupsAPIView.as_view(), name="student_groups"),
     path('group_get/', GroupApi.as_view()),
+    path('group/', GroupListCreateView.as_view(), name='group-list-create'),
+    path('group/<int:pk>/', GroupRetrieveUpdateDeleteView.as_view(), name='group-detail'),
 
     path('workerAPI/', WorkerApiView.as_view()),
     path('workerId/<int:pk>/', WorkerApiViewId.as_view()),
