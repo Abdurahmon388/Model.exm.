@@ -18,7 +18,7 @@ class ParentsSerializer(serializers.ModelSerializer):
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
-        fields = ['id', 'full_name']
+        fields = "__all__"
 
 class UserAllSerializer(serializers.ModelSerializer):
     class Meta:

@@ -29,6 +29,8 @@ from django.views import View
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 import random
+from .models import Student
+from .serializers import StudentSerializer
 
 class Pagination(LimitOffsetPagination):
     default_limit = 10
@@ -140,6 +142,20 @@ class StudentListView(ListAPIView):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
     pagination_class = StudentPagination
+    
+
+class StudentPagination(PageNumberPagination):
+    page_size = 10  
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+@api_view(['GET'])
+def student_list_api(request):
+    students = Student.objects.all().order_by('id')  
+    paginator = StudentPagination()
+    result_page = paginator.paginate_queryset(students, request)
+    serializer = StudentSerializer(result_page, many=True)
+    return paginator.get_paginated_response(serializer.data)
 
 
 class StudentUpdateView(UpdateAPIView):

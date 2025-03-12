@@ -123,7 +123,8 @@ class Departments(models.Model):
 
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    full_name = models.CharField(max_length=255)
+    full_name = models.CharField(max_length=100)
+    created = models.DateTimeField(auto_now_add=True)
     email = models.EmailField()
     age = models.IntegerField()
     group = models.ManyToManyField('Group', related_name='student')
@@ -139,6 +140,7 @@ class Student(models.Model):
     class Meta:
         verbose_name = 'Student'
         verbose_name_plural = 'Students'
+        ordering = ['id']
 
 class Parents(models.Model):
     student = models.OneToOneField(Student, on_delete=models.CASCADE)
