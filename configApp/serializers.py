@@ -1,6 +1,7 @@
 
 from django.contrib.auth.hashers import make_password
 from .models import *
+from .models import Comment
 from typing import Any, Dict, Optional, Type, TypeVar
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
@@ -14,6 +15,12 @@ class ParentsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Parents
         fields = "__all__"
+        
+
+class CommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = '__all__'
         
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -34,6 +41,16 @@ class UserSerializer(serializers.ModelSerializer):
         validated_data['password'] = make_password(validated_data['password'])
         return super().create(validated_data)
     
+class UserCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password']
+        extra_kwargs = {'password': {'write_only': True}}  # faqat yozish uchun
+
+    def create(self, validated_data):
+        user = User.objects.create_user(**validated_data)  #  yaratish
+        return user
+        
 class CourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
@@ -45,9 +62,11 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         fields = ['id', 'student', 'course', 'status', 'date_joined']
 
 class TeacherSerializer(serializers.ModelSerializer):
+    comments = CommentSerializer(many=True, read_only=True)
+
     class Meta:
         model = Teacher
-        fields = ['id', 'user', 'course', 'descriptions']
+        fields = '__all__'
 
 
 class ChangePasswordSerializer(serializers.ModelSerializer):
@@ -114,7 +133,7 @@ class RoomSerializer(serializers.ModelSerializer):
 
 
 class GroupSerializer(serializers.ModelSerializer):
-    students = StudentSerializer(many=True)  # PrimaryKeyRelatedField o‘rniga
+    students = StudentSerializer(many=True)  # 
     class Meta:
         model = Group
         fields = "__all__"
@@ -142,7 +161,7 @@ class GroupHomeWorkSerializer(serializers.ModelSerializer):
 class AttendanceLevelSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceLevel
-        fields = ['id', 'title', 'descriptions']
+        fields = ['id', 'level', 'title', 'created_at']
 
 class DepartamentAddWorker(serializers.Serializer):
     worker_id = serializers.IntegerField()

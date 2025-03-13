@@ -8,7 +8,7 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, permissions, status
 from rest_framework.generics import ListAPIView, UpdateAPIView, RetrieveAPIView
 from rest_framework.pagination import PageNumberPagination, LimitOffsetPagination
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils.module_loading import import_string
@@ -16,8 +16,11 @@ from rest_framework.request import Request
 from rest_framework.serializers import Serializer
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 from .models import *
+from configApp.models import Comment
 from .serializers import *
+from configApp.serializers import CommentSerializer
 from django.contrib.auth.hashers import make_password
 from rest_framework.viewsets import ModelViewSet
 from rest_framework import viewsets
@@ -65,6 +68,16 @@ class UserDeleteView(generics.DestroyAPIView):
     lookup_field = 'id'
     permission_classes = [IsAuthenticated]
 
+
+class CreateUserView(APIView):
+    def post(self, request):
+        serializer = UserCreateSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "User created successfully!"}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class PhoneSendOTP(APIView):
     @swagger_auto_schema(request_body=SMSSerializer)
     def post(self, request, *args, **kwargs):
@@ -97,6 +110,11 @@ def send_otp(phone):
         return False
 
 class StatisticsView(APIView):
+    """
+    Ushbu API date1 va date2 oralig‘idagi statistikani chiqaradi.
+    """
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
         date1 = request.GET.get('date1')
         date2 = request.GET.get('date2')
@@ -110,12 +128,15 @@ class StatisticsView(APIView):
         if not date1 or not date2:
             return Response({"error": "Noto‘g‘ri sana formati"}, status=400)
 
-        data = {
-            "registered": Enrollment.objects.filter(status='registered', date_joined__range=[date1, date2]).count(),
-            "studying": Enrollment.objects.filter(status='studying', date_joined__range=[date1, date2]).count(),
-            "graduated": Enrollment.objects.filter(status='graduated', date_joined__range=[date1, date2]).count(),
-        }
-        return Response(data)
+        stats = {}
+        for course in Course.objects.all():
+            stats[course.name] = {
+                "registered": Enrollment.objects.filter(course=course, status='registered', date_joined__range=[date1, date2]).count(),
+                "studying": Enrollment.objects.filter(course=course, status='studying', date_joined__range=[date1, date2]).count(),
+                "graduated": Enrollment.objects.filter(course=course, status='graduated', date_joined__range=[date1, date2]).count()
+            }
+
+        return Response(stats)
 
 class EnrollmentUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Enrollment.objects.all()
@@ -126,10 +147,9 @@ class StudentViewSet(viewsets.ModelViewSet):
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
     
-from rest_framework.permissions import AllowAny
 
 class StudentListByIdsAPIView(APIView):
-    permission_classes = [AllowAny]  # Auth talab qilinmaydi
+    permission_classes = [BasePermission]  
 
     def post(self, request, *args, **kwargs):
         student_ids = request.data.get("student_ids", [])
@@ -346,6 +366,34 @@ class CourseApiView(ModelViewSet):
     serializer_class = CourseSerializer
     pagination_class = PageNumberPagination
 
+
+class CourseStatisticsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        start_date = request.data.get("start_date")
+        end_date = request.data.get("end_date")
+
+        if not start_date or not end_date:
+            return Response({"error": "start_date va end_date talab qilinadi"}, status=400)
+
+        start_date = parse_date(start_date)
+        end_date = parse_date(end_date)
+
+        if not start_date or not end_date:
+            return Response({"error": "Noto‘g‘ri sana formati"}, status=400)
+
+        stats = {}
+        for course in Course.objects.all():
+            stats[course.name] = {
+                "registered": Enrollment.objects.filter(course=course, status='registered', date_joined__range=[start_date, end_date]).count(),
+                "studying": Enrollment.objects.filter(course=course, status='studying', date_joined__range=[start_date, end_date]).count(),
+                "graduated": Enrollment.objects.filter(course=course, status='graduated', date_joined__range=[start_date, end_date]).count()
+            }
+
+        return Response(stats)
+
+
 class TeacherApiView(APIView):
     pagination_class = PageNumberPagination
 
@@ -375,6 +423,20 @@ class TeacherListView(ListAPIView):
     queryset = Teacher.objects.all()
     serializer_class = TeacherSerializer
     pagination_class = Pagination
+
+class TeacherListCreateView(generics.ListCreateAPIView):
+    queryset = Teacher.objects.all()
+    serializer_class = TeacherSerializer
+
+# Bitta Teacher ni olish
+class TeacherDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Teacher.objects.all()
+    serializer_class = TeacherSerializer
+
+# Comment yaratish
+class CommentCreateView(generics.CreateAPIView):
+    queryset = Comment.objects.all()
+    serializer_class = CommentSerializer
 
 class TeacherUpdateView(UpdateAPIView):
     queryset = Teacher.objects.all()
@@ -619,7 +681,7 @@ class GroupApi(APIView):
 
 class GroupListByIdsAPIView(APIView):
     def post(self, request, *args, **kwargs):
-        group_ids = request.data.get("group_ids", [])  # JSON dan group ID larini olish
+        group_ids = request.data.get("group_ids", [])  # JSON 
         groups = Group.objects.filter(id__in=group_ids)  # Shu ID dagi grouplarni olish
         serializer = GroupSerializer(groups, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -643,7 +705,42 @@ class AttendanceLevelApi(ModelViewSet):
     queryset = AttendanceLevel.objects.all().order_by('-id')
     serializer_class = AttendanceLevelSerializer
     pagination_class = PageNumberPagination
+
+
+class AttendanceStatisticsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        start_date = request.data.get("start_date")
+        end_date = request.data.get("end_date")
+
+        if not start_date or not end_date:
+            return Response({"error": "start_date va end_date talab qilinadi"}, status=400)
+
+        start_date = parse_date(start_date)
+        end_date = parse_date(end_date)
+
+        if not start_date or not end_date:
+            return Response({"error": "Noto‘g‘ri sana formati"}, status=400)
+
+        stats = Attendance.objects.filter(date__range=[start_date, end_date]).values("status").annotate(count=Count("id"))
+
+        return Response(stats)
+
     
+class AttendanceLevelView(APIView):
+    def post(self, request, *args, **kwargs):
+        serializer = AttendanceLevelSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get(self, request, *args, **kwargs):
+        attendance_levels = AttendanceLevel.objects.all()
+        serializer = AttendanceLevelSerializer(attendance_levels, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+            
 class GroupHomeWorkApi(ModelViewSet):
     pagination_class = PageNumberPagination
     queryset = GroupHomeWork.objects.all().order_by('-id')
@@ -656,23 +753,36 @@ class HomeWorkApi(ModelViewSet):
 
 
 class ParentsViewSet(viewsets.ViewSet):
-    permission_classes = [PageNumberPagination]
+    """
+    Ota-onalar uchun CRUD API.
+    """
+    queryset = Parents.objects.all()
+    serializer_class = ParentsSerializer
+    permission_classes = [BasePermission]
 
     def list(self, request):
+        """
+        Barcha ota-onalarni ro‘yxatini qaytaradi.
+        """
         parents = Parents.objects.all()
-        paginator = Pagination()
+        paginator = PageNumberPagination()
         result_page = paginator.paginate_queryset(parents, request)
         serializer = ParentsSerializer(result_page, many=True)
-        return Response(serializer.data)
+        return paginator.get_paginated_response(serializer.data)
 
     def retrieve(self, request, pk=None):
+        """
+        Bitta ota-onaning ma'lumotlarini olish.
+        """
         parent = get_object_or_404(Parents, pk=pk)
         serializer = ParentsSerializer(parent)
         return Response(serializer.data)
 
     @action(detail=False, methods=['post'], url_path='create/parent')
-    @swagger_auto_schema(request_body=ParentsSerializer)
     def create_parent(self, request):
+        """
+        Ota-onani yaratish uchun API.
+        """
         serializer = ParentsSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -681,6 +791,9 @@ class ParentsViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['put'], url_path='update/parent')
     def update_parent(self, request, pk=None):
+        """
+        Ota-onaning ma'lumotlarini yangilash.
+        """
         parent = get_object_or_404(Parents, pk=pk)
         serializer = ParentsSerializer(parent, data=request.data, partial=True)
         if serializer.is_valid():
@@ -690,9 +803,12 @@ class ParentsViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['delete'], url_path='delete/parent')
     def delete_parent(self, request, pk=None):
+        """
+        Ota-onani o‘chirish.
+        """
         parent = get_object_or_404(Parents, pk=pk)
         parent.delete()
-        return Response({'status':True,'detail': 'Parent muaffaqiatli uchirildi'}, status=status.HTTP_204_NO_CONTENT)
+        return Response({'status': True, 'detail': 'Parent muvaffaqiyatli o‘chirildi'}, status=status.HTTP_204_NO_CONTENT)
 
 
 User = get_user_model()
@@ -736,11 +852,10 @@ class VerifyOTPView(APIView):
         user, created = User.objects.get_or_create(phone=phone)
         
         if created:
-            user.set_password(str(otp_code))  # Parol sifatida vaqtinchalik OTP
+            user.set_password(str(otp_code)) 
             user.save()
 
         # OTP ni cache dan o‘chirish
         cache.delete(phone)
 
         return Response({"message": "Ro'yxatdan o‘tish muvaffaqiyatli yakunlandi"}, status=status.HTTP_200_OK)
-

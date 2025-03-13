@@ -60,6 +60,11 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.is_admin
 
 class Teacher(models.Model):
+    
+    name = models.CharField(max_length=100)
+    subject = models.CharField(max_length=100)
+    experience = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     departments = models.ManyToManyField('Departments', related_name='teachers')
     course = models.ManyToManyField('Course', related_name="teachers")
@@ -109,6 +114,14 @@ class Worker(models.Model):
     def __str__(self):
         return self.user.phone
 
+class Comment(models.Model):
+    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name="comments")
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Comment by {self.teacher.name}"
+
 class Departments(models.Model):
     title = models.CharField(max_length=50)
     is_active = models.BooleanField(default=True)
@@ -149,6 +162,7 @@ class Parents(models.Model):
     address = models.CharField(max_length=200, null=True, blank=True)
     descriptions = models.CharField(max_length=500, null=True, blank=True)
     created = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -232,11 +246,13 @@ class HomeWork(models.Model):
     descriptions = models.CharField(max_length=500, blank=True, null=True)
 
 class AttendanceLevel(models.Model):
+    level = models.CharField(max_length=100)  #
+    description = models.TextField(blank=True, null=True)  # 
+    created_at = models.DateTimeField(auto_now_add=True)  
     title = models.CharField(max_length=50)
-    descriptions = models.CharField(max_length=500, blank=True, null=True)
 
     def __str__(self):
-        return self.title
+        return self.level
 
 class Attendance(models.Model):
     level = models.ForeignKey(AttendanceLevel, on_delete=models.RESTRICT)
