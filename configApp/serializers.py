@@ -1,13 +1,11 @@
 
 from django.contrib.auth.hashers import make_password
 from .models import *
-from .models import Comment
 from typing import Any, Dict, Optional, Type, TypeVar
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.models import AbstractBaseUser, update_last_login
 from django.utils.translation import gettext_lazy as _
-
 from rest_framework import exceptions, serializers
 from rest_framework.exceptions import ValidationError
 
@@ -45,10 +43,10 @@ class UserCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['username', 'email', 'password']
-        extra_kwargs = {'password': {'write_only': True}}  # faqat yozish uchun
+        extra_kwargs = {'password': {'write_only': True}} 
 
     def create(self, validated_data):
-        user = User.objects.create_user(**validated_data)  #  yaratish
+        user = User.objects.create_user(**validated_data)  
         return user
         
 class CourseSerializer(serializers.ModelSerializer):
@@ -162,6 +160,17 @@ class AttendanceLevelSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceLevel
         fields = ['id', 'level', 'title', 'created_at']
+
+
+class AttendanceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Attendance
+        fields = '__all__'
+
+class AttendanceStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AttendanceStatus
+        fields = '__all__'
 
 class DepartamentAddWorker(serializers.Serializer):
     worker_id = serializers.IntegerField()

@@ -1,6 +1,4 @@
 import random
-from configApp.models import Student
-from configApp.serializers import StudentSerializer
 from configApp.pagination import StudentPagination
 from django.core.cache import cache
 from django.shortcuts import render, get_object_or_404
@@ -18,9 +16,9 @@ from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import *
-from configApp.models import Comment
 from .serializers import *
-from configApp.serializers import CommentSerializer
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 from django.contrib.auth.hashers import make_password
 from rest_framework.viewsets import ModelViewSet
 from rest_framework import viewsets
@@ -31,9 +29,6 @@ from django.http import JsonResponse
 from django.views import View
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-import random
-from .models import Student
-from .serializers import StudentSerializer
 
 class Pagination(LimitOffsetPagination):
     default_limit = 10
@@ -68,6 +63,61 @@ class UserDeleteView(generics.DestroyAPIView):
     lookup_field = 'id'
     permission_classes = [IsAuthenticated]
 
+
+class UserViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Barcha foydalanuvchilarni olish",
+        responses={200: UserSerializer(many=True)},
+    )
+    def list(self, request):
+        users = User.objects.all()
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        operation_description="Foydalanuvchi ID bo‘yicha olish",
+        responses={200: UserSerializer()},
+    )
+    def retrieve(self, request, pk=None):
+        user = get_object_or_404(User, pk=pk)
+        serializer = UserSerializer(user)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        operation_description="Yangi foydalanuvchi yaratish",
+        request_body=UserSerializer,
+        responses={201: "Foydalanuvchi yaratildi"},
+    )
+    def create(self, request):
+        serializer = UserSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @swagger_auto_schema(
+        operation_description="Foydalanuvchini yangilash",
+        request_body=UserSerializer,
+        responses={200: "Foydalanuvchi yangilandi"},
+    )
+    def update(self, request, pk=None):
+        user = get_object_or_404(User, pk=pk)
+        serializer = UserSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @swagger_auto_schema(
+        operation_description="Foydalanuvchini o‘chirish",
+        responses={204: "Foydalanuvchi o‘chirildi"},
+    )
+    def destroy(self, request, pk=None):
+        user = get_object_or_404(User, pk=pk)
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 class CreateUserView(APIView):
     def post(self, request):
@@ -370,6 +420,18 @@ class CourseApiView(ModelViewSet):
 class CourseStatisticsView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+        operation_description="Sanalar oralig‘ida kurslar statistikasi",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=["start_date", "end_date"],
+            properties={
+                "start_date": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, description="Boshlanish sanasi"),
+                "end_date": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, description="Tugash sanasi"),
+            },
+        ),
+        responses={200: "Statistika qaytarildi"},
+    )
     def post(self, request):
         start_date = request.data.get("start_date")
         end_date = request.data.get("end_date")
@@ -383,16 +445,21 @@ class CourseStatisticsView(APIView):
         if not start_date or not end_date:
             return Response({"error": "Noto‘g‘ri sana formati"}, status=400)
 
-        stats = {}
-        for course in Course.objects.all():
-            stats[course.name] = {
-                "registered": Enrollment.objects.filter(course=course, status='registered', date_joined__range=[start_date, end_date]).count(),
-                "studying": Enrollment.objects.filter(course=course, status='studying', date_joined__range=[start_date, end_date]).count(),
-                "graduated": Enrollment.objects.filter(course=course, status='graduated', date_joined__range=[start_date, end_date]).count()
-            }
+        stats = Course.objects.filter(created_at__range=[start_date, end_date]).count()
 
-        return Response(stats)
+        return Response({"total_courses": stats})
 
+    @swagger_auto_schema(
+        operation_description="Yangi kurs yaratish",
+        request_body=CourseSerializer,
+        responses={201: "Kurs yaratildi"},
+    )
+    def create(self, request):
+        serializer = CourseSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class TeacherApiView(APIView):
     pagination_class = PageNumberPagination
@@ -645,9 +712,6 @@ class StudentApiViewId(APIView):
         except Exception as e:
             return Response(data={'error': e})
         
-from rest_framework import generics
-from configApp.models import Group
-from configApp.serializers import GroupSerializer
 
 class GroupListCreateView(generics.ListCreateAPIView):
     queryset = Group.objects.all()
@@ -681,10 +745,55 @@ class GroupApi(APIView):
 
 class GroupListByIdsAPIView(APIView):
     def post(self, request, *args, **kwargs):
-        group_ids = request.data.get("group_ids", [])  # JSON 
-        groups = Group.objects.filter(id__in=group_ids)  # Shu ID dagi grouplarni olish
+        group_ids = request.data.get("group_ids", []) 
+        groups = Group.objects.filter(id__in=group_ids)  
         serializer = GroupSerializer(groups, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class GroupStatisticsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Sanalar oralig‘ida guruhlar statistikasi",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=["start_date", "end_date"],
+            properties={
+                "start_date": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, description="Boshlanish sanasi"),
+                "end_date": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, description="Tugash sanasi"),
+            },
+        ),
+        responses={200: "Statistika qaytarildi"},
+    )
+    def post(self, request):
+        start_date = request.data.get("start_date")
+        end_date = request.data.get("end_date")
+
+        if not start_date or not end_date:
+            return Response({"error": "start_date va end_date talab qilinadi"}, status=400)
+
+        start_date = parse_date(start_date)
+        end_date = parse_date(end_date)
+
+        if not start_date or not end_date:
+            return Response({"error": "Noto‘g‘ri sana formati"}, status=400)
+
+        stats = Group.objects.filter(created_at__range=[start_date, end_date]).count()
+
+        return Response({"total_groups": stats})
+
+    @swagger_auto_schema(
+        operation_description="Yangi guruh yaratish",
+        request_body=GroupSerializer,
+        responses={201: "Guruh yaratildi"},
+    )
+    def create(self, request):
+        serializer = GroupSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class TableTypeApi(ModelViewSet):
     pagination_class = PageNumberPagination
@@ -706,10 +815,21 @@ class AttendanceLevelApi(ModelViewSet):
     serializer_class = AttendanceLevelSerializer
     pagination_class = PageNumberPagination
 
-
 class AttendanceStatisticsView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+        operation_description="Sanalar oralig‘ida davomat statistikasi",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=["start_date", "end_date"],
+            properties={
+                "start_date": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, description="Boshlanish sanasi"),
+                "end_date": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, description="Tugash sanasi"),
+            },
+        ),
+        responses={200: "Statistika qaytarildi"},
+    )
     def post(self, request):
         start_date = request.data.get("start_date")
         end_date = request.data.get("end_date")
@@ -724,8 +844,19 @@ class AttendanceStatisticsView(APIView):
             return Response({"error": "Noto‘g‘ri sana formati"}, status=400)
 
         stats = Attendance.objects.filter(date__range=[start_date, end_date]).values("status").annotate(count=Count("id"))
-
         return Response(stats)
+    
+    def create(self, request):
+        serializer = AttendanceSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class AttendanceStatusViewSet(viewsets.ModelViewSet):
+    queryset = AttendanceStatus.objects.all().order_by('-created_at')
+    serializer_class = AttendanceStatusSerializer
+    permission_classes = [IsAuthenticated]
 
     
 class AttendanceLevelView(APIView):

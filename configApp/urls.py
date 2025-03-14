@@ -2,11 +2,11 @@
 from django.urls import path, include
 from .views import *
 from rest_framework.routers import DefaultRouter
-from configApp.views import CourseApiView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 
 router = DefaultRouter()
+router.register(r'users', UserViewSet, basename='user')
 router.register(r'teachers', TeacherViewSet, basename='teacher')
 router.register(r'students', StudentViewSet)
 router.register(r'department', DepartmentsApiView)
@@ -19,6 +19,7 @@ router.register(r'groupHome', GroupHomeWorkApi)
 router.register(r'topic', TopicsApi)
 router.register(r'homeWork', HomeWorkApi)
 router.register(r'attendance-level', AttendanceLevelApi, basename='attendance-level')
+router.register(r'attendances/status', AttendanceStatusViewSet, basename='attendance-status')
 router.register(r'parents', ParentsViewSet, basename='parent')
 router.register(r'course', CourseApiView, basename='unique_course')
 
@@ -34,9 +35,10 @@ urlpatterns = [
     path('userApi/', RegisterUserApi.as_view()),
     path("statistics/", StatisticsView.as_view(), name="api_statistics_list"),
     path("enrollment/<int:pk>/", EnrollmentUpdateDeleteView.as_view(), name="enrollment_update_delete"),
-    path('statistics/attendance-statistics/', AttendanceStatisticsView.as_view(), name='attendance-statistics'),
     path('statistics/courses-statistics/', CourseStatisticsView.as_view(), name='courses-statistics'),
 
+    path('statistics/attendance-statistics/', AttendanceStatisticsView.as_view(), name='attendance-statistics'),
+    path('statistics/groups-statistics/', GroupStatisticsView.as_view(), name='groups-statistics'),
     path('refresh_password/', ChangePasswordView.as_view()),
     path('sentOTP/', PhoneSendOTP.as_view()),
     path('sentOTP_and_phone/', VerifySms.as_view()),
